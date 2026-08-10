@@ -1,0 +1,158 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<meta name="theme-color" content="#12160F">
+<meta name="description" content="Homestead personal productivity app">
+<link rel="manifest" href="manifest.json">
+<title>Homestead</title>
+<style>
+*{box-sizing:border-box}body{margin:0;background:#12160F;color:#F2EFE6;font-family:Arial,sans-serif}
+button,input,select{font:inherit}button{cursor:pointer}.app{min-height:100vh}.top{position:sticky;top:0;z-index:20;background:#1B211A;border-bottom:1px solid #333D2E;padding:14px 16px;display:flex;justify-content:space-between;align-items:center}.brand{font-size:22px;font-weight:700;color:#E8B93E}
+.layout{display:flex;max-width:1180px;margin:auto}.side{width:245px;flex:none;min-height:calc(100vh - 57px);background:#1B211A;border-right:1px solid #333D2E;padding:18px 12px;position:sticky;top:57px}
+.main{flex:1;padding:24px;max-width:920px}.nav{width:100%;padding:11px 12px;border:0;background:transparent;color:#9BA593;text-align:left;border-radius:9px;margin:2px 0}.nav.active{background:#212A1D;color:#E8B93E}
+.card,.hero,.tile{background:#1B211A;border:1px solid #333D2E;border-radius:10px;padding:16px;margin-bottom:12px}.hero{padding:22px}.eyebrow{font-size:12px;letter-spacing:.12em;text-transform:uppercase;color:#E8B93E}.h1{font-size:30px;margin:6px 0 4px;font-weight:700}.muted{color:#9BA593;font-size:13px}.row{display:flex;gap:8px;align-items:center}.grow{flex:1}.input{width:100%;background:#212A1D;border:1px solid #333D2E;color:#F2EFE6;padding:10px 12px;border-radius:7px;outline:none}.btn{border:0;border-radius:7px;padding:10px 13px;background:#E8B93E;color:#12160F;font-weight:700}.ghost{background:transparent;color:#F2EFE6;border:1px solid #333D2E}.danger{color:#C1502E;background:transparent;border:0}.progress{height:8px;background:#212A1D;border-radius:99px;overflow:hidden}.progress i{display:block;height:100%;background:#E8B93E}.grid2{display:grid;grid-template-columns:repeat(2,1fr);gap:12px}.grid3{display:grid;grid-template-columns:repeat(3,1fr);gap:12px}.grid4{display:grid;grid-template-columns:repeat(4,1fr);gap:12px}.big{font-size:28px;color:#E8B93E;font-weight:700}.list{display:flex;align-items:center;gap:10px}.check{width:25px;height:25px;border-radius:6px;border:1px solid #333D2E;background:transparent;color:#12160F}.check.on{background:#7FA07E;border-color:#7FA07E}.range{width:100%;accent-color:#E8B93E}.days{display:flex;gap:5px}.day{width:30px;height:30px;border-radius:50%;border:0;background:#212A1D;color:#9BA593}.day.on{background:#E8B93E;color:#12160F}.tabs{display:flex;gap:7px;margin-bottom:12px}.pill{border:0;border-radius:99px;padding:7px 12px;background:#212A1D;color:#9BA593}.pill.on{background:#E8B93E;color:#12160F}.mobile{display:none}
+@media(max-width:760px){.layout{display:block}.side{position:fixed;z-index:30;left:0;top:57px;bottom:0;transform:translateX(-105%);transition:.2s;width:260px;min-height:0}.side.open{transform:none}.mobile{display:block}.main{padding:16px 14px}.grid2,.grid3,.grid4{grid-template-columns:1fr 1fr}.desktop{display:none}.row.stack{flex-direction:column;align-items:stretch}}
+@media(max-width:450px){.grid2,.grid3,.grid4{grid-template-columns:1fr}.h1{font-size:27px}}
+</style>
+</head>
+<body>
+<div id="app"></div>
+<script>
+(function(){
+"use strict";
+const C={gold:"#E8B93E",sage:"#7FA07E",rust:"#C1502E"};
+const days=["S","M","T","W","T","F","S"];
+const nav=[
+["dashboard","⌂","Dashboard"],["routine","☀","Daily Routine"],["todos","✓","To-Do List"],
+["goals","◎","Goal Tracker"],["habits","🔥","Habit Tracker"],["life","↗","Life Progress"],
+["courses","🎓","Course Tracker"],["growth","▥","Completion Calculator"]
+];
+const key=k=>"homestead-"+k;
+const uid=()=>Math.random().toString(36).slice(2,10);
+const today=()=>new Date().toISOString().slice(0,10);
+const fmt=d=>d?new Date(d+"T00:00:00").toLocaleDateString(undefined,{month:"short",day:"numeric"}):"";
+function load(k,f){try{const x=localStorage.getItem(key(k));return x?JSON.parse(x):f}catch(e){return f}}
+function save(k,v){try{localStorage.setItem(key(k),JSON.stringify(v))}catch(e){}}
+let state={
+tab:"dashboard",menu:false,
+routine:load("routine",[]),todos:load("todos",[]),goals:load("goals",[]),habits:load("habits",[]),
+life:load("life",[]),courses:load("courses",[]),
+routineTitle:"",routineTime:"07:00",routineDays:[0,1,2,3,4,5,6],
+todoTitle:"",todoDue:"",todoPriority:"medium",todoFilter:"open",
+goalTitle:"",goalTarget:"",habitName:"",lifeName:"",courseTitle:"",courseProvider:"",
+openGoal:null,openCourse:null,courseHours:"",dailyHours:"",studyDays:"7"
+};
+function esc(s){return String(s??"").replace(/[&<>"']/g,m=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[m]))}
+function setState(k,v){state[k]=v; if(["routine","todos","goals","habits","life","courses"].includes(k))save(k,v); render()}
+function progress(v){return '<div class="progress"><i style="width:'+Math.max(0,Math.min(100,v))+'%"></i></div>'}
+function card(x){return '<div class="card">'+x+"</div>"}
+function section(e,t,s){return '<div style="margin-bottom:18px"><div class="eyebrow">'+e+'</div><div class="h1">'+t+'</div><div class="muted">'+s+"</div></div>"}
+function input(name,type="text",placeholder=""){return '<input class="input" data-field="'+name+'" type="'+type+'" placeholder="'+placeholder.replace(/"/g,"&quot;")+'" value="'+esc(state[name])+'">'}
+function dashboard(){
+ const t=today(),n=new Date().getDay(),rt=state.routine.filter(x=>x.days.includes(n)),rd=rt.filter(x=>x.doneDates.includes(t)).length;
+ const open=state.todos.filter(x=>!x.done).length,hab=state.habits.filter(x=>x.logs.includes(t)).length;
+ const goal=state.goals.length?Math.round(state.goals.reduce((a,x)=>a+x.progress,0)/state.goals.length):null;
+ const last14=Array.from({length:14},(_,i)=>{let d=new Date();d.setDate(d.getDate()-i);return d.toISOString().slice(0,10)});
+ const hp=state.habits.length?Math.round(state.habits.reduce((a,h)=>a+h.logs.filter(d=>last14.includes(d)).length/14*100,0)/state.habits.length):null;
+ const cp=state.courses.length?Math.round(state.courses.reduce((a,c)=>a+(c.modules.length?c.modules.filter(m=>m.done).length/c.modules.length*100:0),0)/state.courses.length):null;
+ const vals=[goal,hp,cp].filter(x=>x!==null),overall=vals.length?Math.round(vals.reduce((a,x)=>a+x,0)/vals.length):0;
+ let h='<div class="hero"><div class="eyebrow">'+new Date().toLocaleDateString(undefined,{weekday:"long",month:"long",day:"numeric"})+'</div><div class="h1">Every good number is a habit, kept.</div></div>';
+ h+=card('<div class="row"><div class="big">'+overall+'%</div><div class="grow"><b>Overall progress</b><div class="muted">Auto-calculated from Goals, Habits & Courses</div>'+progress(overall)+'</div></div><div class="grid3" style="margin-top:15px">'+
+ [["Goals",goal,"goals"],["Habits",hp,"habits"],["Courses",cp,"courses"]].map(x=>'<button class="tile" data-go="'+x[2]+'"><div class="muted">'+x[0]+'</div><div class="big">'+(x[1]===null?"—":x[1]+"%")+'</div>'+progress(x[1]||0)+'</button>').join("")+"</div>");
+ h+='<div class="grid4">'+[["☀","Routine today",rd+"/"+rt.length,"routine"],["✓","Open to-dos",open,"todos"],["🔥","Habits checked in",hab+"/"+state.habits.length,"habits"],["↗","Life areas tracked",state.life.length,"life"]].map(x=>'<button class="tile" data-go="'+x[3]+'"><div style="font-size:22px">'+x[0]+'</div><div class="big">'+x[2]+'</div><div class="muted">'+x[1]+"</div></button>").join("")+"</div>";
+ return h;
+}
+function routine(){
+ let h=section("Every day","Daily Routine","Recurring anchors for your day, checked off as you go.");
+ h+=card('<div class="row stack">'+input("routineTitle","text","e.g. Morning feed round")+input("routineTime","time")+'<button class="btn" data-action="addRoutine">＋ Add</button></div><div class="days" style="margin-top:10px">'+days.map((d,i)=>'<button class="day '+(state.routineDays.includes(i)?"on":"")+'" data-day="'+i+'">'+d+"</button>").join("")+"</div>");
+ const n=new Date().getDay(),t=today();
+ state.routine.slice().sort((a,b)=>a.time.localeCompare(b.time)).forEach(r=>{});
+ h+=state.routine.slice().sort((a,b)=>a.time.localeCompare(b.time)).map(r=>{let active=r.days.includes(n),done=r.doneDates.includes(t);return card('<div class="list"><button class="check '+(done?"on":"")+'" '+(!active?"disabled":"")+' data-routine="'+r.id+'">'+(done?"✓":"")+'</button><span style="color:#E8B93E">'+esc(r.time)+'</span><span class="grow" style="text-decoration:'+(done?"line-through":"none")+'">'+esc(r.title)+'</span><button class="danger" data-del-routine="'+r.id+'">🗑</button></div>')}).join("");
+ return h;
+}
+function todos(){
+ let h=section("Get it done","To-Do List","One-off tasks, prioritized and dated.");
+ h+=card('<div class="row stack">'+input("todoTitle","text","What needs doing?")+input("todoDue","date")+'<select class="input" data-field="todoPriority"><option value="high" '+(state.todoPriority==="high"?"selected":"")+'>High</option><option value="medium" '+(state.todoPriority==="medium"?"selected":"")+'>Medium</option><option value="low" '+(state.todoPriority==="low"?"selected":"")+'>Low</option></select><button class="btn" data-action="addTodo">＋ Add</button></div>');
+ h+='<div class="tabs">'+["open","done","all"].map(f=>'<button class="pill '+(state.todoFilter===f?"on":"")+'" data-filter="'+f+'">'+f+"</button>").join("")+"</div>";
+ let arr=state.todos.filter(x=>state.todoFilter==="open"?!x.done:state.todoFilter==="done"?x.done:true).slice().sort((a,b)=>(a.due||"9999").localeCompare(b.due||"9999"));
+ h+=arr.length?arr.map(x=>card('<div class="list"><button class="check '+(x.done?"on":"")+'" data-todo="'+x.id+'">'+(x.done?"✓":"")+'</button><span style="color:'+(x.priority==="high"?C.rust:x.priority==="low"?C.sage:C.gold)+'">●</span><span class="grow" style="text-decoration:'+(x.done?"line-through":"none")+';opacity:'+(x.done?".5":"1")+'">'+esc(x.title)+'</span>'+(x.due?'<span class="muted">'+fmt(x.due)+"</span>":"")+'<button class="danger" data-del-todo="'+x.id+'">🗑</button></div>')).join(""):'<div class="muted">Nothing here.</div>';
+ return h;
+}
+function goals(){
+ let h=section("Aim true","Goal Tracker","Bigger targets, broken into milestones.");
+ h+=card('<div class="row stack">'+input("goalTitle","text","Goal title")+input("goalTarget","date")+'<button class="btn" data-action="addGoal">＋ Add</button></div>');
+ h+=state.goals.map(g=>card('<div class="list"><span class="grow" style="font-size:19px">'+esc(g.title)+'</span><span style="color:#E8B93E">'+g.progress+'%</span><button class="danger" data-del-goal="'+g.id+'">🗑</button></div>'+(g.target?'<div class="muted">Target '+fmt(g.target)+'</div>':"")+progress(g.progress)+'<input class="range" type="range" min="0" max="100" value="'+g.progress+'" data-goal-progress="'+g.id+'">')).join("");
+ return h;
+}
+function habits(){
+ let h=section("Consistency compounds","Habit Tracker","Daily check-ins and streaks, last 14 days.");
+ h+=card('<div class="row">'+input("habitName","text","e.g. Record morning feed weight")+'<button class="btn" data-action="addHabit">＋ Add</button></div>');
+ const last=Array.from({length:14},(_,i)=>{let d=new Date();d.setDate(d.getDate()-(13-i));return d.toISOString().slice(0,10)});
+ h+=state.habits.map(x=>{let s=0,d=new Date();while(x.logs.includes(d.toISOString().slice(0,10))){s++;d.setDate(d.getDate()-1)}return card('<div class="list"><span class="grow">🔥 '+esc(x.name)+'</span><span style="color:#E8B93E">'+s+'d streak</span><button class="danger" data-del-habit="'+x.id+'">🗑</button></div><div style="display:grid;grid-template-columns:repeat(14,1fr);gap:4px;margin-top:12px">'+last.map(day=>'<button title="'+day+'" data-habit-day="'+x.id+'|'+day+'" style="aspect-ratio:1;border:0;border-radius:4px;background:'+(x.logs.includes(day)?C.sage:"#212A1D")+'"></button>').join("")+"</div>")}).join("");
+ return h;
+}
+function life(){
+ if(!state.life.length){state.life=["Health & Fitness","Career / Farm Business","Finance","Relationships","Personal Growth","Recreation"].map(n=>({id:uid(),name:n,score:5,note:""}));save("life",state.life)}
+ let overall=state.life.length?Math.round(state.life.reduce((a,x)=>a+x.score,0)/(state.life.length*10)*100):0;
+ let h=section("The whole picture","Life Progress Tracker","Rate each area of life 0–10 and watch the balance.");
+ h+=card('<div class="big">'+overall+'%</div>'+progress(overall));
+ h+=state.life.map(a=>card('<div class="list"><span class="grow">'+esc(a.name)+'</span><span style="color:#E8B93E">'+a.score+'/10</span><button class="danger" data-del-life="'+a.id+'">🗑</button></div><input class="range" type="range" min="0" max="10" value="'+a.score+'" data-life-score="'+a.id+'">'+input("lifeNote_"+a.id,"text","Notes (optional)").replace('value=""','value="'+esc(a.note)+'"')).join("");
+ h+=card('<div class="row">'+input("lifeName","text","Add a life area")+'<button class="btn" data-action="addLife">＋ Add</button></div>');
+ return h;
+}
+function courses(){
+ let h=section("Keep learning","Course Tracker","Track modules and completion for anything you're studying.");
+ h+=card('<div class="row stack">'+input("courseTitle","text","Course title")+input("courseProvider","text","Provider (optional)")+'<button class="btn" data-action="addCourse">＋ Add</button></div>');
+ h+=state.courses.map(c=>{let pct=c.modules.length?Math.round(c.modules.filter(m=>m.done).length/c.modules.length*100):0;return card('<div class="list"><button class="danger" data-open-course="'+c.id+'">'+(state.openCourse===c.id?"▼":"▶")+'</button><span class="grow" style="font-size:19px">'+esc(c.title)+' <small class="muted">'+esc(c.provider||"")+'</small></span><span style="color:#E8B93E">'+pct+'%</span><button class="danger" data-del-course="'+c.id+'">🗑</button></div>'+progress(pct)+(state.openCourse===c.id?'<div style="margin-top:10px">'+c.modules.map(m=>'<div class="list" style="padding:5px 0"><button class="check '+(m.done?"on":"")+'" data-module="'+c.id+'|'+m.id+'">'+(m.done?"✓":"")+'</button><span class="grow">'+esc(m.title)+'</span><button class="danger" data-del-module="'+c.id+'|'+m.id+'">×</button></div>').join("")+'<div class="row" style="margin-top:8px"><input class="input moduleInput" data-module-input="'+c.id+'" placeholder="Add module"><button class="btn" data-add-module="'+c.id+'">＋</button></div></div>':"")}) .join("");
+ return h;
+}
+function growth(){
+ let course=+state.courseHours||0,daily=+state.dailyHours||0,days=+state.studyDays||7,sessions=daily?course/daily:0,cal=sessions?Math.ceil(sessions/days*7):0;
+ let finish=cal?(()=>{let d=new Date();d.setDate(d.getDate()+cal);return d.toLocaleDateString(undefined,{weekday:"short",month:"short",day:"numeric",year:"numeric"})})():"—";
+ return section("Plan the finish","Course Completion Calculator","How many days to finish a course, given your free hours per day.")+
+ card('<div class="grid3"><div><label class="muted">Course length (hours)</label>'+input("courseHours","number")+'</div><div><label class="muted">Free time (hours/day)</label>'+input("dailyHours","number")+'</div><div><label class="muted">Study days/week</label>'+input("studyDays","number")+'</div></div><div class="grid3" style="margin-top:12px">'+card('<div class="muted">Days to Complete</div><div class="big">'+(cal||"—")+"</div>")+card('<div class="muted">In weeks</div><div class="big">'+(cal?(cal/7).toFixed(1):"—")+"</div>")+card('<div class="muted">Estimated finish</div><div class="big" style="font-size:18px">'+finish+"</div>")+"</div>");
+}
+function render(){
+ const views={dashboard:dashboard,routine:routine,todos:todos,goals:goals,habits:habits,life:life,courses:courses,growth:growth};
+ let h='<div class="top"><div class="brand">Homestead</div><button class="btn ghost mobile" data-action="menu">☰</button></div><div class="layout"><aside class="side '+(state.menu?"open":"")+'"><div class="brand desktop" style="padding:0 10px 18px">Homestead</div>'+nav.map(n=>'<button class="nav '+(state.tab===n[0]?"active":"")+'" data-go="'+n[0]+'">'+n[1]+'&nbsp; '+n[2]+"</button>").join("")+'</aside><main class="main">'+views[state.tab]()+"</main></div>";
+ document.getElementById("app").innerHTML=h;bind();
+}
+function bind(){
+ document.querySelectorAll("[data-go]").forEach(b=>b.onclick=()=>{state.tab=b.dataset.go;state.menu=false;render()});
+ document.querySelectorAll("[data-field]").forEach(el=>el.oninput=()=>{state[el.dataset.field]=el.value});
+ document.querySelectorAll("[data-day]").forEach(b=>b.onclick=()=>{let d=+b.dataset.day;state.routineDays=state.routineDays.includes(d)?state.routineDays.filter(x=>x!==d):state.routineDays.concat(d);render()});
+ document.querySelectorAll("[data-filter]").forEach(b=>b.onclick=()=>{state.todoFilter=b.dataset.filter;render()});
+ document.querySelectorAll("[data-routine]").forEach(b=>b.onclick=()=>{let id=b.dataset.routine,t=today();state.routine=state.routine.map(x=>x.id===id?{...x,doneDates:x.doneDates.includes(t)?x.doneDates.filter(d=>d!==t):x.doneDates.concat(t)}:x);save("routine",state.routine);render()});
+ document.querySelectorAll("[data-del-routine]").forEach(b=>b.onclick=()=>{state.routine=state.routine.filter(x=>x.id!==b.dataset.delRoutine);save("routine",state.routine);render()});
+ document.querySelectorAll("[data-todo]").forEach(b=>b.onclick=()=>{state.todos=state.todos.map(x=>x.id===b.dataset.todo?{...x,done:!x.done}:x);save("todos",state.todos);render()});
+ document.querySelectorAll("[data-del-todo]").forEach(b=>b.onclick=()=>{state.todos=state.todos.filter(x=>x.id!==b.dataset.delTodo);save("todos",state.todos);render()});
+ document.querySelectorAll("[data-goal-progress]").forEach(e=>e.oninput=()=>{state.goals=state.goals.map(x=>x.id===e.dataset.goalProgress?{...x,progress:+e.value}:x);save("goals",state.goals);render()});
+ document.querySelectorAll("[data-del-goal]").forEach(b=>b.onclick=()=>{state.goals=state.goals.filter(x=>x.id!==b.dataset.delGoal);save("goals",state.goals);render()});
+ document.querySelectorAll("[data-del-habit]").forEach(b=>b.onclick=()=>{state.habits=state.habits.filter(x=>x.id!==b.dataset.delHabit);save("habits",state.habits);render()});
+ document.querySelectorAll("[data-habit-day]").forEach(b=>b.onclick=()=>{let [id,d]=b.dataset.habitDay.split("|");state.habits=state.habits.map(x=>x.id===id?{...x,logs:x.logs.includes(d)?x.logs.filter(a=>a!==d):x.logs.concat(d)}:x);save("habits",state.habits);render()});
+ document.querySelectorAll("[data-del-life]").forEach(b=>b.onclick=()=>{state.life=state.life.filter(x=>x.id!==b.dataset.delLife);save("life",state.life);render()});
+ document.querySelectorAll("[data-life-score]").forEach(e=>e.oninput=()=>{state.life=state.life.map(x=>x.id===e.dataset.lifeScore?{...x,score:+e.value}:x);save("life",state.life);render()});
+ document.querySelectorAll("[data-del-course]").forEach(b=>b.onclick=()=>{state.courses=state.courses.filter(x=>x.id!==b.dataset.delCourse);save("courses",state.courses);render()});
+ document.querySelectorAll("[data-open-course]").forEach(b=>b.onclick=()=>{state.openCourse=state.openCourse===b.dataset.openCourse?null:b.dataset.openCourse;render()});
+ document.querySelectorAll("[data-module]").forEach(b=>b.onclick=()=>{let [cid,mid]=b.dataset.module.split("|");state.courses=state.courses.map(c=>c.id===cid?{...c,modules:c.modules.map(m=>m.id===mid?{...m,done:!m.done}:m)}:c);save("courses",state.courses);render()});
+ document.querySelectorAll("[data-del-module]").forEach(b=>b.onclick=()=>{let [cid,mid]=b.dataset.delModule.split("|");state.courses=state.courses.map(c=>c.id===cid?{...c,modules:c.modules.filter(m=>m.id!==mid)}:c);save("courses",state.courses);render()});
+ document.querySelectorAll("[data-action]").forEach(b=>b.onclick=()=>{
+  const a=b.dataset.action;
+  if(a==="menu"){state.menu=!state.menu;render()}
+  if(a==="addRoutine"&&state.routineTitle.trim()){state.routine.push({id:uid(),title:state.routineTitle.trim(),time:state.routineTime,days:state.routineDays.slice(),doneDates:[]});save("routine",state.routine);state.routineTitle="";render()}
+  if(a==="addTodo"&&state.todoTitle.trim()){state.todos.unshift({id:uid(),title:state.todoTitle.trim(),due:state.todoDue,priority:state.todoPriority,done:false});save("todos",state.todos);state.todoTitle="";state.todoDue="";render()}
+  if(a==="addGoal"&&state.goalTitle.trim()){state.goals.unshift({id:uid(),title:state.goalTitle.trim(),target:state.goalTarget,progress:0,milestones:[]});save("goals",state.goals);state.goalTitle="";state.goalTarget="";render()}
+  if(a==="addHabit"&&state.habitName.trim()){state.habits.push({id:uid(),name:state.habitName.trim(),logs:[]});save("habits",state.habits);state.habitName="";render()}
+  if(a==="addLife"&&state.lifeName.trim()){state.life.push({id:uid(),name:state.lifeName.trim(),score:5,note:""});save("life",state.life);state.lifeName="";render()}
+  if(a==="addCourse"&&state.courseTitle.trim()){state.courses.unshift({id:uid(),title:state.courseTitle.trim(),provider:state.courseProvider,modules:[]});save("courses",state.courses);state.courseTitle="";state.courseProvider="";render()}
+ });
+ document.querySelectorAll("[data-add-module]").forEach(b=>b.onclick=()=>{let el=document.querySelector('[data-module-input="'+b.dataset.addModule+'"]');if(el&&el.value.trim()){state.courses=state.courses.map(c=>c.id===b.dataset.addModule?{...c,modules:c.modules.concat({id:uid(),title:el.value.trim(),done:false})}:c);save("courses",state.courses);render()}});
+ document.querySelectorAll("[data-field^='lifeNote_']").forEach(e=>e.oninput=()=>{let id=e.dataset.field.slice(9);state.life=state.life.map(x=>x.id===id?{...x,note:e.value}:x);save("life",state.life)});
+}
+render();
+})();
+</script>
+</body>
+</html>
